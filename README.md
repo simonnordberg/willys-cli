@@ -20,7 +20,7 @@ go build -o willys-cli .
 
 ## Setup
 
-Credentials (Swedish personnummer + password) can be provided via:
+Credentials (Swedish personnummer + password) via environment variables or a `.env` file:
 
 ```bash
 # Environment variables
@@ -30,9 +30,6 @@ export WILLYS_PASSWORD=yourpassword
 # Or a .env file in the current directory
 echo 'WILLYS_USERNAME=YYYYMMDDNNNN' >> .env
 echo 'WILLYS_PASSWORD=yourpassword' >> .env
-
-# Or flags
-willys-cli --username YYYYMMDDNNNN --password yourpassword <command>
 ```
 
 ## Usage
@@ -56,15 +53,15 @@ Launches a full terminal UI with three tabs:
 For scripting and automation:
 
 ```bash
-# Search
-willys-cli search mjölk
-willys-cli search "ekologisk mjölk" --count 20
+# Sök efter produkter
+willys-cli search bananer
+willys-cli search "ekologisk korv" --count 20
 
-# Browse categories
+# Bläddra i kategorier
 willys-cli categories
-willys-cli browse frukt-och-gront/frukt
+willys-cli browse frukt-och-gront/gronsaker
 
-# Cart
+# Varukorg
 willys-cli cart
 willys-cli cart add 101233933_ST --qty 2
 willys-cli cart remove 101233933_ST
@@ -75,18 +72,18 @@ willys-cli login
 willys-cli status
 willys-cli logout
 
-# Batch operations from CSV
-willys-cli --batch shopping-list.csv
+# Batchoperationer från CSV
+willys-cli --batch handlingslista.csv
 ```
 
 ### Batch CSV format
 
 ```csv
+# Veckans inköp
 add,101233933_ST,2
 add,101205823_ST,1
 remove,101233933_ST
 cart
-clear
 ```
 
 Lines starting with `#` are ignored.

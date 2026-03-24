@@ -13,11 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	username string
-	password string
-	batch    string
-)
+var batch string
 
 func main() {
 	root := &cobra.Command{
@@ -25,15 +21,7 @@ func main() {
 		Short: "Willys.se grocery store CLI",
 		Long:  "Search products, browse categories, and manage your shopping cart at Willys.se.",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Load .env if it exists (ignore errors — file may not exist)
 			env.Load(".env")
-
-			if username == "" {
-				username = strings.Trim(os.Getenv("WILLYS_USERNAME"), `"`)
-			}
-			if password == "" {
-				password = strings.Trim(os.Getenv("WILLYS_PASSWORD"), `"`)
-			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -51,8 +39,6 @@ func main() {
 		SilenceErrors: true,
 	}
 
-	root.PersistentFlags().StringVarP(&username, "username", "u", "", "Willys username (personnummer)")
-	root.PersistentFlags().StringVarP(&password, "password", "p", "", "Willys password")
 	root.Flags().StringVarP(&batch, "batch", "i", "", "CSV file with batch operations")
 
 	root.AddCommand(loginCmd())
@@ -69,23 +55,24 @@ func main() {
 	}
 }
 
-func requireCreds() error {
+func getCreds() (string, string, error) {
+	username := strings.Trim(os.Getenv("WILLYS_USERNAME"), `"`)
+	password := strings.Trim(os.Getenv("WILLYS_PASSWORD"), `"`)
 	if username == "" || password == "" {
-		return fmt.Errorf("credentials required: use --username/--password flags or set WILLYS_USERNAME/WILLYS_PASSWORD")
+		return "", "", fmt.Errorf("credentials required: set WILLYS_USERNAME and WILLYS_PASSWORD env vars or use a .env file")
 	}
-	return nil
+	return username, password, nil
 }
 
 func getClient() (*willys.Client, error) {
 	c := willys.NewClient()
 
-	// Try saved session first.
 	if c.IsLoggedIn() {
 		return c, nil
 	}
 
-	// Need fresh login.
-	if err := requireCreds(); err != nil {
+	username, password, err := getCreds()
+	if err != nil {
 		return nil, err
 	}
 	if _, err := c.Login(username, password); err != nil {
@@ -99,7 +86,8 @@ func loginCmd() *cobra.Command {
 		Use:   "login",
 		Short: "Log in and save session",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := requireCreds(); err != nil {
+			username, password, err := getCreds()
+			if err != nil {
 				return err
 			}
 			c := willys.NewClient()
@@ -379,9 +367,6 @@ func printCategory(cat willys.Category, depth int) {
 }
 
 func runBatch(file string) error {
-	if err := requireCreds(); err != nil {
-		return err
-	}
 	c, err := getClient()
 	if err != nil {
 		return err

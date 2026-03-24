@@ -52,6 +52,8 @@ func newModel(client *willys.Client) Model {
 func Run(client *willys.Client) error {
 	p := tea.NewProgram(newModel(client), tea.WithAltScreen())
 	_, err := p.Run()
+	// Reset terminal state — bubbletea doesn't always restore cleanly in tmux.
+	fmt.Print("\033[?25h\033[0m\033[?1049l")
 	return err
 }
 

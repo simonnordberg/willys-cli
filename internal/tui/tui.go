@@ -15,10 +15,11 @@ const (
 	tabSearch = iota
 	tabBrowse
 	tabCart
+	tabOrders
 	tabCount
 )
 
-var tabNames = []string{"Search", "Browse", "Cart"}
+var tabNames = []string{"Search", "Browse", "Cart", "Orders"}
 
 // Model is the root TUI model.
 type Model struct {
@@ -33,6 +34,7 @@ type Model struct {
 	search   searchModel
 	browse   browseModel
 	cartView cartModel
+	orders   ordersModel
 
 	status  string
 	err     error
@@ -45,6 +47,7 @@ func newModel(client *willys.Client) Model {
 		search:   newSearchModel(),
 		browse:   newBrowseModel(),
 		cartView: newCartModel(),
+		orders:   newOrdersModel(),
 	}
 }
 
@@ -62,9 +65,11 @@ func (m Model) Init() tea.Cmd {
 		fetchCustomerCmd(m.client),
 		fetchCartCmd(m.client),
 		fetchCategoriesCmd(m.client),
+		fetchOrderHistoryCmd(m.client),
 		m.search.spinner.Tick,
 		m.browse.spinner.Tick,
 		m.cartView.spinner.Tick,
+		m.orders.spinner.Tick,
 	)
 }
 
@@ -79,6 +84,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.search.setSize(m.width, contentHeight)
 		m.browse.setSize(m.width, contentHeight)
 		m.cartView.setSize(m.width, contentHeight)
+		m.orders.setSize(m.width, contentHeight)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -94,12 +100,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeTab = (m.activeTab + 1) % tabCount
 			if m.activeTab == tabCart {
 				cmds = append(cmds, fetchCartCmd(m.client))
+			} else if m.activeTab == tabOrders {
+				cmds = append(cmds, fetchOrderHistoryCmd(m.client))
 			}
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, keys.ShiftTab):
 			m.activeTab = (m.activeTab - 1 + tabCount) % tabCount
 			if m.activeTab == tabCart {
 				cmds = append(cmds, fetchCartCmd(m.client))
+			} else if m.activeTab == tabOrders {
+				cmds = append(cmds, fetchOrderHistoryCmd(m.client))
 			}
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, keys.Search):
@@ -147,6 +157,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "Cart cleared"
 		}
 
+	case orderHistoryMsg:
+		m.orders, _ = m.orders.Update(msg, m.client, m.cart)
+
+	case orderDetailMsg:
+		m.orders, _ = m.orders.Update(msg, m.client, m.cart)
+
+	case reorderMsg:
+		m.orders.loading = false
+		if msg.err == nil {
+			m.cart = msg.cart
+			m.cartView.setCartItems(msg.cart)
+			m.status = "All items added to cart"
+		} else {
+			m.status = errorStyle.Render(msg.err.Error())
+		}
+
 	case statusMsg:
 		m.status = string(msg)
 	}
@@ -165,6 +191,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.cartView, cmd = m.cartView.Update(msg, m.client, m.cart)
 		cmds = append(cmds, cmd)
+	case tabOrders:
+		var cmd tea.Cmd
+		m.orders, cmd = m.orders.Update(msg, m.client, m.cart)
+		cmds = append(cmds, cmd)
 	}
 
 	// Forward spinner ticks to all tabs.
@@ -180,6 +210,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.activeTab != tabCart {
 			m.cartView.spinner, cmd = m.cartView.spinner.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+		if m.activeTab != tabOrders {
+			m.orders.spinner, cmd = m.orders.spinner.Update(msg)
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -230,6 +264,8 @@ func (m Model) View() string {
 		b.WriteString(m.browse.View(m.width, contentHeight))
 	case tabCart:
 		b.WriteString(m.cartView.View(m.width, contentHeight, m.cart))
+	case tabOrders:
+		b.WriteString(m.orders.View(m.width, contentHeight))
 	}
 
 	// Help bar at bottom.
@@ -260,6 +296,8 @@ func (m Model) helpText() string {
 		return "↑↓: navigate" + m.browse.helpKeys() + "  |  " + base
 	case tabCart:
 		return "↑↓: navigate  +/-: qty  d: remove  x: clear  |  " + base
+	case tabOrders:
+		return m.orders.helpKeys() + "  |  " + base
 	}
 	return base
 }

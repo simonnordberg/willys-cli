@@ -54,6 +54,21 @@ type cartClearedMsg struct {
 	err  error
 }
 
+type orderHistoryMsg struct {
+	orders []willys.OrderSummary
+	err    error
+}
+
+type orderDetailMsg struct {
+	order willys.OrderDetail
+	err   error
+}
+
+type reorderMsg struct {
+	cart willys.Cart
+	err  error
+}
+
 type statusMsg string
 
 // Commands
@@ -114,5 +129,39 @@ func clearCartCmd(c *willys.Client) tea.Cmd {
 		}
 		cart, err := c.GetCart()
 		return cartClearedMsg{cart, err}
+	}
+}
+
+func fetchOrderHistoryCmd(c *willys.Client) tea.Cmd {
+	return func() tea.Msg {
+		orders, err := c.GetOrderHistory()
+		return orderHistoryMsg{orders, err}
+	}
+}
+
+func fetchOrderDetailCmd(c *willys.Client, orderNumber string) tea.Cmd {
+	return func() tea.Msg {
+		order, err := c.GetOrderDetail(orderNumber)
+		return orderDetailMsg{order, err}
+	}
+}
+
+func reorderCmd(c *willys.Client, products map[string][]willys.OrderEntry) tea.Cmd {
+	return func() tea.Msg {
+		var cart willys.Cart
+		var err error
+		for _, items := range products {
+			for _, e := range items {
+				if e.Code == "" {
+					continue
+				}
+				qty := max(e.PickQuantity, e.Quantity, 1)
+				cart, err = c.AddToCart(e.Code, qty)
+				if err != nil {
+					return reorderMsg{cart, err}
+				}
+			}
+		}
+		return reorderMsg{cart, nil}
 	}
 }

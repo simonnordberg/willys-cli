@@ -48,6 +48,7 @@ func main() {
 	root.AddCommand(categoriesCmd())
 	root.AddCommand(browseCmd())
 	root.AddCommand(cartCmd())
+	root.AddCommand(ordersCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -315,6 +316,98 @@ func cartCmd() *cobra.Command {
 	return cart
 }
 
+func ordersCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "orders [order-number]",
+		Short: "View order history or order details",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			if len(args) == 1 {
+				order, err := c.GetOrderDetail(args[0])
+				if err != nil {
+					return err
+				}
+				printOrderDetail(order)
+				return nil
+			}
+			orders, err := c.GetOrderHistory()
+			if err != nil {
+				return err
+			}
+			printOrderHistory(orders)
+			return nil
+		},
+	}
+}
+
+func printOrderHistory(orders []willys.OrderSummary) {
+	if len(orders) == 0 {
+		fmt.Println("No orders found.")
+		return
+	}
+	fmt.Printf("%d orders:\n", len(orders))
+	for _, o := range orders {
+		status := o.OrderStatus.Code
+		if status == "" {
+			status = "unknown"
+		}
+		price := o.Total
+		if price == "" {
+			price = o.TotalPrice.FormattedValue
+		}
+		date := o.DeliveryDate
+		if date == "" {
+			date = o.OrderDate
+		}
+		fmt.Printf("  #%s  %s  %s  %s\n", o.OrderNumber, date, status, price)
+	}
+}
+
+func printOrderDetail(o willys.OrderDetail) {
+	status := o.StatusDisplay
+	if status == "" {
+		status = o.OrderStatus.Code
+	}
+	total := o.TotalPrice.FormattedValue
+	if total == "" {
+		total = o.NettoCost.FormattedValue
+	}
+	fmt.Printf("Order #%s (%s)\n", o.OrderNumber, status)
+	if o.DeliveryDate != "" {
+		fmt.Printf("Delivery: %s\n", o.DeliveryDate)
+	}
+	if total != "" {
+		fmt.Printf("Total: %s\n", total)
+	}
+	fmt.Println()
+	for category, entries := range o.Products {
+		fmt.Printf("  %s:\n", category)
+		for _, e := range entries {
+			qty := e.PickQuantity
+			if qty == 0 {
+				qty = e.Quantity
+			}
+			parts := []string{fmt.Sprintf("    %s", e.Name)}
+			if e.Manufacturer != "" {
+				parts = append(parts, fmt.Sprintf("[%s]", e.Manufacturer))
+			}
+			if e.DisplayVolume != "" {
+				parts = append(parts, e.DisplayVolume)
+			}
+			if qty > 1 {
+				parts = append(parts, fmt.Sprintf("x%d", qty))
+			}
+			parts = append(parts, fmt.Sprintf("— %s", e.TotalPrice))
+			parts = append(parts, fmt.Sprintf("(%s)", e.Code))
+			fmt.Println(strings.Join(parts, " "))
+		}
+	}
+}
+
 func formatProduct(p willys.Product) string {
 	parts := []string{p.Name}
 	if p.Manufacturer != "" {
@@ -467,6 +560,20 @@ func runOp(c *willys.Client, op string, args []string) error {
 			return err
 		}
 		printCategory(tree, 0)
+	case "orders":
+		if len(args) > 0 {
+			order, err := c.GetOrderDetail(args[0])
+			if err != nil {
+				return err
+			}
+			printOrderDetail(order)
+		} else {
+			orders, err := c.GetOrderHistory()
+			if err != nil {
+				return err
+			}
+			printOrderHistory(orders)
+		}
 	case "browse":
 		if len(args) < 1 {
 			return fmt.Errorf("browse requires a category path")

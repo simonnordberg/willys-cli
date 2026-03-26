@@ -357,6 +357,52 @@ func (c *Client) RemoveFromCart(code string) (Cart, error) {
 	return c.AddToCart(code, 0)
 }
 
+// GetOrderHistory returns the order history for the logged-in user.
+// The API may return either a raw array or an object with an "orders" key.
+func (c *Client) GetOrderHistory() ([]OrderSummary, error) {
+	resp, err := c.do(http.MethodGet, "/axfood/rest/account/orders", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get order history failed: %d", resp.StatusCode)
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	// Try decoding as array first, then as object with "orders" key.
+	var orders []OrderSummary
+	if err := json.Unmarshal(raw, &orders); err == nil {
+		return orders, nil
+	}
+	var wrapper struct {
+		Orders []OrderSummary `json:"orders"`
+	}
+	if err := json.Unmarshal(raw, &wrapper); err != nil {
+		return nil, fmt.Errorf("decoding order history: %w", err)
+	}
+	return wrapper.Orders, nil
+}
+
+// GetOrderDetail returns the full details of a single order.
+func (c *Client) GetOrderDetail(orderNumber string) (OrderDetail, error) {
+	params := url.Values{
+		"q": {orderNumber},
+	}
+	resp, err := c.do(http.MethodGet, "/axfood/rest/orderdata?"+params.Encode(), nil)
+	if err != nil {
+		return OrderDetail{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return OrderDetail{}, fmt.Errorf("get order detail failed: %d", resp.StatusCode)
+	}
+	var order OrderDetail
+	return order, json.NewDecoder(resp.Body).Decode(&order)
+}
+
 // ClearCart removes all products from the cart.
 func (c *Client) ClearCart() error {
 	if c.csrfToken == "" {

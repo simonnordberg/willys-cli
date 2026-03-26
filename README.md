@@ -108,6 +108,21 @@ Mejeri, ost & ägg
   100010649_ST   2    43,80 kr  Mjölk Färsk 3% [Falköpings] 1,5l
 ```
 
+## AI agent integration
+
+The CLI is designed to be driven by AI agents (e.g. Claude Code). The consistent columnar output with product codes first makes it easy to parse programmatically, and the batch CSV format allows agents to build shopping lists and execute them in one shot.
+
+Example workflow with Claude Code:
+
+1. Agent plans a weekly meal plan based on family preferences
+2. Searches for products: `willys-cli search "kokosmjölk"` — parses codes from output
+3. Reviews order history: `willys-cli orders show <id>` — reuses known product codes
+4. Builds a CSV batch file with all items
+5. Executes: `willys-cli -i shopping-list.csv`
+6. Verifies: `willys-cli cart` — confirms totals
+
+The `/shop` slash command in the [companion repo](https://github.com/simonnordberg/willys-shopping) automates the full flow — meal planning, product search, cart management, and recipe generation.
+
 ## Session
 
 Sessions are persisted to `~/.config/willys-cli/session.json`. After the first login, subsequent commands reuse the saved session until it expires.

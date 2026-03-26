@@ -18,10 +18,17 @@ func TestFormatProduct(t *testing.T) {
 		ComparePriceUnit: "l",
 	}
 	got := FormatProduct(p)
-	for _, want := range []string{"Mjölk Färsk 3%", "[Falköpings]", "1,5l", "21,90 kr", "(14,60 kr/l)", "(100010649_ST)"} {
+	// Code first, then price, compare price, description
+	for _, want := range []string{"100010649_ST", "21,90 kr", "14,60 kr/l", "Mjölk Färsk 3%", "[Falköpings]", "1,5l"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("FormatProduct missing %q in %q", want, got)
 		}
+	}
+	// Code should appear before description
+	codeIdx := strings.Index(got, "100010649_ST")
+	nameIdx := strings.Index(got, "Mjölk")
+	if codeIdx > nameIdx {
+		t.Errorf("code should appear before name: %q", got)
 	}
 }
 
@@ -32,24 +39,24 @@ func TestFormatProduct_Minimal(t *testing.T) {
 		Price: "19,90 kr",
 	}
 	got := FormatProduct(p)
-	if !strings.Contains(got, "Banan") || !strings.Contains(got, "(100254920_KG)") {
+	if !strings.Contains(got, "100254920_KG") || !strings.Contains(got, "Banan") {
 		t.Errorf("FormatProduct minimal: %q", got)
 	}
 	if strings.Contains(got, "[]") {
-		t.Errorf("FormatProduct should skip empty manufacturer: %q", got)
+		t.Errorf("should skip empty manufacturer: %q", got)
 	}
 }
 
 func TestFormatCart_Empty(t *testing.T) {
 	got := FormatCart(willys.Cart{})
 	if got != "Cart is empty." {
-		t.Errorf("FormatCart empty = %q, want %q", got, "Cart is empty.")
+		t.Errorf("FormatCart empty = %q", got)
 	}
 }
 
 func TestFormatCart(t *testing.T) {
 	cart := willys.Cart{
-		TotalUnitCount: 2,
+		TotalUnitCount: 3,
 		TotalPrice:     "85,80 kr",
 		Products: []willys.CartProduct{
 			{
@@ -68,9 +75,20 @@ func TestFormatCart(t *testing.T) {
 		},
 	}
 	got := FormatCart(cart)
-	for _, want := range []string{"Cart (2 items):", "Mjölk", "x2", "Ägg 15p", "[Garant Eko]", "Total: 85,80 kr"} {
+	// Code first, then qty, then price
+	for _, want := range []string{"Cart — 3 items", "100010649_ST", "101241403_ST", "[Garant Eko]", "Total: 85,80 kr"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("FormatCart missing %q in:\n%s", want, got)
+		}
+	}
+	// Verify code appears before description on same line
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "100010649_ST") {
+			codeIdx := strings.Index(line, "100010649_ST")
+			nameIdx := strings.Index(line, "Mjölk")
+			if codeIdx > nameIdx {
+				t.Errorf("code should appear before name: %q", line)
+			}
 		}
 	}
 }
@@ -92,10 +110,14 @@ func TestFormatOrderHistory(t *testing.T) {
 		},
 	}
 	got := FormatOrderHistory(orders)
-	for _, want := range []string{"1 orders:", "#3057837654", "2026-03-24", "delivered", "3 291,29 kr"} {
+	for _, want := range []string{"1 orders", "3057837654", "2026-03-24", "delivered", "3 291,29 kr"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("FormatOrderHistory missing %q in:\n%s", want, got)
 		}
+	}
+	// No # prefix
+	if strings.Contains(got, "#3057837654") {
+		t.Errorf("order number should not have # prefix: %s", got)
 	}
 }
 
@@ -118,7 +140,16 @@ func TestFormatOrderDetail(t *testing.T) {
 		},
 	}
 	got := FormatOrderDetail(order)
-	for _, want := range []string{"#3057837654", "Levererad", "3 291,29 kr", "Mejeri:", "Mjölk Färsk 3%", "x2", "(100010649_ST)"} {
+	// Header: Order NUMBER — STATUS — TOTAL
+	if !strings.Contains(got, "Order 3057837654 — Levererad — 3 291,29 kr") {
+		t.Errorf("header format wrong in:\n%s", got)
+	}
+	// Category as plain header
+	if !strings.Contains(got, "Mejeri\n") {
+		t.Errorf("category should be plain header in:\n%s", got)
+	}
+	// Item line: code first
+	for _, want := range []string{"100010649_ST", "Mjölk Färsk 3%", "[Falköpings]", "1,5l", "43,80 kr"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("FormatOrderDetail missing %q in:\n%s", want, got)
 		}
@@ -130,14 +161,14 @@ func TestFormatCategory(t *testing.T) {
 		Title: "Frukt & Grönt",
 		URL:   "/frukt-gront",
 		Children: []willys.Category{
-			{Title: "Frukt", URL: "/frukt", Children: nil},
+			{Title: "Frukt", URL: "/frukt"},
 		},
 	}
 	got := FormatCategory(cat, 0)
-	if !strings.Contains(got, "Frukt & Grönt (/frukt-gront)") {
-		t.Errorf("FormatCategory root: %q", got)
+	if !strings.Contains(got, "Frukt & Grönt") || !strings.Contains(got, "/frukt-gront") {
+		t.Errorf("root category: %q", got)
 	}
-	if !strings.Contains(got, "  Frukt (/frukt)") {
-		t.Errorf("FormatCategory child: %q", got)
+	if !strings.Contains(got, "  Frukt") {
+		t.Errorf("child should be indented: %q", got)
 	}
 }

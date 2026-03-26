@@ -7,53 +7,64 @@ import (
 	"github.com/simonnordberg/willys-cli/internal/willys"
 )
 
-func FormatProduct(p willys.Product) string {
-	parts := []string{p.Name}
-	if p.Manufacturer != "" {
-		parts = append(parts, fmt.Sprintf("[%s]", p.Manufacturer))
+// formatDesc builds "Name [Manufacturer] Volume" for any product-like thing.
+func formatDesc(name, manufacturer, volume string) string {
+	parts := []string{name}
+	if manufacturer != "" {
+		parts = append(parts, fmt.Sprintf("[%s]", manufacturer))
 	}
-	if p.DisplayVolume != "" {
-		parts = append(parts, p.DisplayVolume)
+	if volume != "" {
+		parts = append(parts, volume)
 	}
-	parts = append(parts, fmt.Sprintf("— %s", p.Price))
-	if p.ComparePrice != "" && p.ComparePriceUnit != "" {
-		parts = append(parts, fmt.Sprintf("(%s/%s)", p.ComparePrice, p.ComparePriceUnit))
-	}
-	parts = append(parts, fmt.Sprintf("(%s)", p.Code))
-	return "  " + strings.Join(parts, " ")
+	return strings.Join(parts, " ")
 }
 
+// FormatProduct formats a search/browse result line.
+// Format: CODE  PRICE  (COMPARE)  Description
+func FormatProduct(p willys.Product) string {
+	compare := ""
+	if p.ComparePrice != "" && p.ComparePriceUnit != "" {
+		compare = fmt.Sprintf("%s/%s", p.ComparePrice, p.ComparePriceUnit)
+	}
+	desc := formatDesc(p.Name, p.Manufacturer, p.DisplayVolume)
+	if compare != "" {
+		return fmt.Sprintf("  %-16s  %10s  %-14s  %s", p.Code, p.Price, compare, desc)
+	}
+	return fmt.Sprintf("  %-16s  %10s                  %s", p.Code, p.Price, desc)
+}
+
+// FormatCart formats the full cart.
+// Format per line: CODE  QTY  PRICE  (COMPARE)  Description
 func FormatCart(cart willys.Cart) string {
 	if cart.TotalUnitCount == 0 {
 		return "Cart is empty."
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Cart (%d items):\n", cart.TotalUnitCount)
+	fmt.Fprintf(&b, "Cart — %d items\n\n", cart.TotalUnitCount)
 	for _, p := range cart.Products {
-		parts := []string{fmt.Sprintf("  %s", p.Name)}
-		if p.Manufacturer != "" {
-			parts = append(parts, fmt.Sprintf("[%s]", p.Manufacturer))
-		}
-		if p.DisplayVolume != "" {
-			parts = append(parts, p.DisplayVolume)
-		}
-		parts = append(parts, fmt.Sprintf("x%d — %s", p.PickQuantity, p.TotalPrice))
+		compare := ""
 		if p.ComparePrice != "" && p.ComparePriceUnit != "" {
-			parts = append(parts, fmt.Sprintf("(%s/%s)", p.ComparePrice, p.ComparePriceUnit))
+			compare = fmt.Sprintf("%s/%s", p.ComparePrice, p.ComparePriceUnit)
 		}
-		parts = append(parts, fmt.Sprintf("(%s)", p.Code))
-		fmt.Fprintln(&b, strings.Join(parts, " "))
+		desc := formatDesc(p.Name, p.Manufacturer, p.DisplayVolume)
+		if compare != "" {
+			fmt.Fprintf(&b, "  %-16s  %2d  %10s  %-14s  %s\n", p.Code, p.PickQuantity, p.TotalPrice, compare, desc)
+		} else {
+			fmt.Fprintf(&b, "  %-16s  %2d  %10s                  %s\n", p.Code, p.PickQuantity, p.TotalPrice, desc)
+		}
 	}
-	fmt.Fprintf(&b, "Total: %s", cart.TotalPrice)
+	fmt.Fprintf(&b, "\nTotal: %s", cart.TotalPrice)
 	return b.String()
 }
 
+// FormatOrderHistory formats the order list.
+// Format: ORDER_NUMBER  DATE  STATUS  TOTAL
 func FormatOrderHistory(orders []willys.OrderSummary) string {
 	if len(orders) == 0 {
 		return "No orders found."
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d orders:\n", len(orders))
+	fmt.Fprintf(&b, "%d orders\n\n", len(orders))
 	for _, o := range orders {
 		status := o.OrderStatus.Code
 		if status == "" {
@@ -67,11 +78,13 @@ func FormatOrderHistory(orders []willys.OrderSummary) string {
 		if date == "" {
 			date = o.OrderDate
 		}
-		fmt.Fprintf(&b, "  #%s  %s  %s  %s\n", o.OrderNumber, date, status, price)
+		fmt.Fprintf(&b, "  %-12s  %-10s  %-10s  %s\n", o.OrderNumber, date, status, price)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// FormatOrderDetail formats a single order with items grouped by category.
+// Format: CODE  QTY  PRICE  Description
 func FormatOrderDetail(o willys.OrderDetail) string {
 	var b strings.Builder
 	status := o.StatusDisplay
@@ -82,46 +95,29 @@ func FormatOrderDetail(o willys.OrderDetail) string {
 	if total == "" {
 		total = o.NettoCost.FormattedValue
 	}
-	fmt.Fprintf(&b, "Order #%s (%s)\n", o.OrderNumber, status)
-	if o.DeliveryDate != "" {
-		fmt.Fprintf(&b, "Delivery: %s\n", o.DeliveryDate)
-	}
-	if total != "" {
-		fmt.Fprintf(&b, "Total: %s\n", total)
-	}
-	fmt.Fprintln(&b)
+	fmt.Fprintf(&b, "Order %s — %s — %s\n", o.OrderNumber, status, total)
 	for category, entries := range o.Products {
-		fmt.Fprintf(&b, "  %s:\n", category)
+		fmt.Fprintf(&b, "\n%s\n", category)
 		for _, e := range entries {
 			qty := e.PickQuantity
 			if qty == 0 {
 				qty = e.Quantity
 			}
-			parts := []string{fmt.Sprintf("    %s", e.Name)}
-			if e.Manufacturer != "" {
-				parts = append(parts, fmt.Sprintf("[%s]", e.Manufacturer))
-			}
-			if e.DisplayVolume != "" {
-				parts = append(parts, e.DisplayVolume)
-			}
-			if qty > 1 {
-				parts = append(parts, fmt.Sprintf("x%d", qty))
-			}
-			parts = append(parts, fmt.Sprintf("— %s", e.TotalPrice))
-			parts = append(parts, fmt.Sprintf("(%s)", e.Code))
-			fmt.Fprintln(&b, strings.Join(parts, " "))
+			desc := formatDesc(e.Name, e.Manufacturer, e.DisplayVolume)
+			fmt.Fprintf(&b, "  %-16s  %2d  %10s  %s\n", e.Code, qty, e.TotalPrice, desc)
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// FormatCategory formats the category tree.
 func FormatCategory(cat willys.Category, depth int) string {
 	if depth > 2 {
 		return ""
 	}
 	var b strings.Builder
 	indent := strings.Repeat("  ", depth)
-	fmt.Fprintf(&b, "%s%s (%s)\n", indent, cat.Title, cat.URL)
+	fmt.Fprintf(&b, "%s%-30s  %s\n", indent, cat.Title, cat.URL)
 	for _, child := range cat.Children {
 		b.WriteString(FormatCategory(child, depth+1))
 	}

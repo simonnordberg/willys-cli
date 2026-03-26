@@ -33,9 +33,6 @@ var (
 			Foreground(colorDanger).
 			Bold(true)
 
-	successStyle = lipgloss.NewStyle().
-			Foreground(colorSuccess)
-
 	priceStyle = lipgloss.NewStyle().
 			Foreground(colorSuccess)
 

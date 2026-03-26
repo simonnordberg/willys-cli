@@ -69,13 +69,13 @@ func (c *Client) saveSession() {
 		return
 	}
 	path := sessionPath()
-	os.MkdirAll(filepath.Dir(path), 0700)
-	os.WriteFile(path, data, 0600)
+	_ = os.MkdirAll(filepath.Dir(path), 0700)
+	_ = os.WriteFile(path, data, 0600)
 }
 
 // ClearSession removes the saved session file.
 func ClearSession() {
-	os.Remove(sessionPath())
+	_ = os.Remove(sessionPath())
 }
 
 func (c *Client) do(method, path string, body any) (*http.Response, error) {
@@ -158,7 +158,7 @@ func (c *Client) ensureSession() error {
 	if err != nil {
 		return fmt.Errorf("establishing session: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return nil
 }
 
@@ -204,7 +204,7 @@ func (c *Client) Login(username, password string) (Customer, error) {
 		if err != nil {
 			return Customer{}, fmt.Errorf("following login redirect: %w", err)
 		}
-		r.Body.Close()
+		_ = r.Body.Close()
 	}
 
 	if err := c.fetchCSRFToken(); err != nil {
@@ -414,7 +414,7 @@ func (c *Client) ClearCart() error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("clear cart failed: %d", resp.StatusCode)
 	}

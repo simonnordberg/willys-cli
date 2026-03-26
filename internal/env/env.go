@@ -28,7 +28,7 @@ func Load(path string) error {
 		val = strings.TrimSpace(val)
 		val = strings.Trim(val, `"'`)
 		if _, exists := os.LookupEnv(key); !exists {
-			os.Setenv(key, val)
+			_ = os.Setenv(key, val)
 		}
 	}
 	return scanner.Err()

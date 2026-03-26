@@ -168,13 +168,3 @@ func (m *searchModel) setSize(w, h int) {
 	m.results.SetSize(w, h-5)
 }
 
-func (m *searchModel) focus() {
-	if !m.hasResults {
-		m.focused = true
-		m.input.Focus()
-	}
-}
-
-func (m *searchModel) blur() {
-	// Keep state but don't change focus behavior
-}

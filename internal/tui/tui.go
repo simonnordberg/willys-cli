@@ -36,9 +36,7 @@ type Model struct {
 	cartView cartModel
 	orders   ordersModel
 
-	status  string
-	err     error
-	loading bool
+	status string
 }
 
 func newModel(client *willys.Client) Model {

@@ -42,6 +42,7 @@ func Execute() {
 	root.AddCommand(searchCmd(), categoriesCmd(), browseCmd())
 	root.AddCommand(cartCmd())
 	root.AddCommand(ordersCmd())
+	root.AddCommand(diffCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

@@ -121,7 +121,6 @@ Example workflow with Claude Code:
 5. Executes: `willys-cli -i shopping-list.csv`
 6. Verifies: `willys-cli cart` — confirms totals
 
-The `/shop` slash command in the [companion repo](https://github.com/simonnordberg/willys-shopping) automates the full flow — meal planning, product search, cart management, and recipe generation.
 
 ## Session
 

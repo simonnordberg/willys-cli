@@ -1,0 +1,176 @@
+package willys
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestParseOrderHistory_Array(t *testing.T) {
+	raw := `[{"orderNumber":"3057837654","formattedOrderDate":"2026-03-24","orderStatus":{"code":"delivered"},"total":"3 291,29 kr"}]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(raw))
+	}))
+	defer srv.Close()
+
+	c := &Client{http: srv.Client(), cookies: map[string]string{}}
+	c.baseOverride = srv.URL
+	orders, err := c.GetOrderHistory()
+	if err != nil {
+		t.Fatalf("GetOrderHistory: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("got %d orders, want 1", len(orders))
+	}
+	if orders[0].OrderNumber != "3057837654" {
+		t.Errorf("order number = %q, want %q", orders[0].OrderNumber, "3057837654")
+	}
+}
+
+func TestParseOrderHistory_Wrapper(t *testing.T) {
+	raw := `{"orders":[{"orderNumber":"3057837654","formattedOrderDate":"2026-03-24","orderStatus":{"code":"delivered"},"total":"3 291,29 kr"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(raw))
+	}))
+	defer srv.Close()
+
+	c := &Client{http: srv.Client(), cookies: map[string]string{}}
+	c.baseOverride = srv.URL
+	orders, err := c.GetOrderHistory()
+	if err != nil {
+		t.Fatalf("GetOrderHistory: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("got %d orders, want 1", len(orders))
+	}
+}
+
+func TestParseOrderHistory_Empty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+
+	c := &Client{http: srv.Client(), cookies: map[string]string{}}
+	c.baseOverride = srv.URL
+	orders, err := c.GetOrderHistory()
+	if err != nil {
+		t.Fatalf("GetOrderHistory: %v", err)
+	}
+	if len(orders) != 0 {
+		t.Fatalf("got %d orders, want 0", len(orders))
+	}
+}
+
+func TestParseSearchResult(t *testing.T) {
+	raw := `{
+		"results": [{"name":"Mjölk","code":"100010649_ST","price":"21,90 kr","manufacturer":"Falköpings","displayVolume":"1,5l"}],
+		"pagination": {"totalNumberOfResults":1,"numberOfPages":1,"currentPage":0,"pageSize":10}
+	}`
+	var result SearchResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(result.Results) != 1 {
+		t.Fatalf("got %d results, want 1", len(result.Results))
+	}
+	p := result.Results[0]
+	if p.Code != "100010649_ST" {
+		t.Errorf("code = %q", p.Code)
+	}
+	if p.Manufacturer != "Falköpings" {
+		t.Errorf("manufacturer = %q", p.Manufacturer)
+	}
+	if result.Pagination.TotalNumberOfResults != 1 {
+		t.Errorf("total = %d", result.Pagination.TotalNumberOfResults)
+	}
+}
+
+func TestParseOrderDetail(t *testing.T) {
+	raw := `{
+		"orderNumber":"3057837654",
+		"statusDisplay":"Levererad",
+		"orderStatus":{"code":"delivered"},
+		"totalPrice":{"value":3291.29,"formattedValue":"3 291,29 kr","currencyIso":"SEK"},
+		"categoryOrderedDeliveredProducts":{
+			"Mejeri":[{"name":"Mjölk","code":"100010649_ST","pickQuantity":2,"totalPrice":"43,80 kr","manufacturer":"Falköpings","displayVolume":"1,5l"}]
+		}
+	}`
+	var order OrderDetail
+	if err := json.Unmarshal([]byte(raw), &order); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if order.OrderNumber != "3057837654" {
+		t.Errorf("order number = %q", order.OrderNumber)
+	}
+	if order.StatusDisplay != "Levererad" {
+		t.Errorf("status = %q", order.StatusDisplay)
+	}
+	items, ok := order.Products["Mejeri"]
+	if !ok || len(items) != 1 {
+		t.Fatalf("Mejeri items = %d", len(items))
+	}
+	if items[0].PickQuantity != 2 {
+		t.Errorf("pick qty = %d", items[0].PickQuantity)
+	}
+}
+
+func TestParseCart(t *testing.T) {
+	raw := `{
+		"products":[{"code":"101476110_ST","name":"A-fil 3%","pickQuantity":4,"totalPrice":"63,60 kr","manufacturer":"Garant","displayVolume":"1kg"}],
+		"totalPrice":"63,60 kr",
+		"totalItems":1,
+		"totalUnitCount":4
+	}`
+	var cart Cart
+	if err := json.Unmarshal([]byte(raw), &cart); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cart.TotalUnitCount != 4 {
+		t.Errorf("unit count = %d", cart.TotalUnitCount)
+	}
+	if len(cart.Products) != 1 {
+		t.Fatalf("products = %d", len(cart.Products))
+	}
+	if cart.Products[0].Code != "101476110_ST" {
+		t.Errorf("code = %q", cart.Products[0].Code)
+	}
+}
+
+func TestSessionRoundTrip(t *testing.T) {
+	tmp := t.TempDir()
+	orig := sessionPath
+	sessionPath = func() string { return filepath.Join(tmp, "session.json") }
+	defer func() { sessionPath = orig }()
+
+	c := &Client{
+		http:      &http.Client{},
+		cookies:   map[string]string{"JSESSIONID": "abc123", "other": "val"},
+		csrfToken: "tok-456",
+	}
+	c.saveSession()
+
+	c2 := &Client{
+		http:    &http.Client{},
+		cookies: make(map[string]string),
+	}
+	c2.loadSession()
+
+	if c2.cookies["JSESSIONID"] != "abc123" {
+		t.Errorf("JSESSIONID = %q", c2.cookies["JSESSIONID"])
+	}
+	if c2.csrfToken != "tok-456" {
+		t.Errorf("csrf = %q", c2.csrfToken)
+	}
+
+	ClearSession()
+	if _, err := os.Stat(filepath.Join(tmp, "session.json")); !os.IsNotExist(err) {
+		t.Error("session file should be deleted after ClearSession")
+	}
+}

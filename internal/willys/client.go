@@ -20,9 +20,10 @@ const (
 
 // Client talks to the Willys.se API.
 type Client struct {
-	http      *http.Client
-	cookies   map[string]string
-	csrfToken string
+	http         *http.Client
+	cookies      map[string]string
+	csrfToken    string
+	baseOverride string // for testing
 }
 
 // sessionData is what gets persisted to disk between invocations.
@@ -31,7 +32,7 @@ type sessionData struct {
 	CSRFToken string            `json:"csrfToken"`
 }
 
-func sessionPath() string {
+var sessionPath = func() string {
 	dir, _ := os.UserConfigDir()
 	return filepath.Join(dir, "willys-cli", "session.json")
 }
@@ -78,10 +79,17 @@ func ClearSession() {
 	_ = os.Remove(sessionPath())
 }
 
+func (c *Client) base() string {
+	if c.baseOverride != "" {
+		return c.baseOverride
+	}
+	return baseURL
+}
+
 func (c *Client) do(method, path string, body any) (*http.Response, error) {
 	u := path
 	if !strings.HasPrefix(path, "http") {
-		u = baseURL + path
+		u = c.base() + path
 	}
 
 	var bodyReader io.Reader

@@ -156,6 +156,80 @@ func TestFormatOrderDetail(t *testing.T) {
 	}
 }
 
+func TestFormatProduct_WithPromotion(t *testing.T) {
+	savings := 25.52
+	p := willys.Product{
+		Name:             "Prosciutto Crudo Skivad",
+		Code:             "101206348_ST",
+		Price:            "37,76 kr",
+		Manufacturer:     "Garant",
+		DisplayVolume:    "80g",
+		ComparePrice:     "472,00 kr",
+		ComparePriceUnit: "kg",
+		SavingsAmount:    &savings,
+		PotentialPromotions: []willys.Promotion{
+			{
+				ConditionLabel:  "2 för",
+				RewardLabel:     "50,00",
+				QualifyingCount: 2,
+			},
+		},
+	}
+	got := FormatProduct(p)
+	if !strings.Contains(got, "2 för 50,00") {
+		t.Errorf("FormatProduct should show promotion, got: %q", got)
+	}
+	if !strings.Contains(got, "101206348_ST") {
+		t.Errorf("FormatProduct should still show code, got: %q", got)
+	}
+}
+
+func TestFormatProduct_NoPromotion(t *testing.T) {
+	p := willys.Product{
+		Name:  "Mjölk Färsk 3%",
+		Code:  "100010649_ST",
+		Price: "21,90 kr",
+	}
+	got := FormatProduct(p)
+	// Should not have any promotion indicator
+	if strings.Contains(got, "för") {
+		t.Errorf("FormatProduct should not show promotion text, got: %q", got)
+	}
+}
+
+func TestFormatCartDeals(t *testing.T) {
+	savings := 25.52
+	products := []DealProduct{
+		{
+			Code:         "101206348_ST",
+			Name:         "Prosciutto Crudo Skivad",
+			Manufacturer: "Garant",
+			Volume:       "80g",
+			Quantity:     2,
+			TotalPrice:   "75,52 kr",
+			Promotion: willys.Promotion{
+				ConditionLabel:  "2 för",
+				RewardLabel:     "50,00",
+				QualifyingCount: 2,
+			},
+			Savings: savings,
+		},
+	}
+	got := FormatCartDeals(products)
+	for _, want := range []string{"101206348_ST", "2 för 50,00", "Prosciutto Crudo Skivad", "sparar"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("FormatCartDeals missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestFormatCartDeals_Empty(t *testing.T) {
+	got := FormatCartDeals(nil)
+	if !strings.Contains(got, "No deals") {
+		t.Errorf("empty deals should say no deals, got: %q", got)
+	}
+}
+
 func TestFormatCategory(t *testing.T) {
 	cat := willys.Category{
 		Title: "Frukt & Grönt",

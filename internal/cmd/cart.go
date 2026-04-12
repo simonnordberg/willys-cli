@@ -84,8 +84,49 @@ func cartCmd() *cobra.Command {
 		},
 	}
 
-	cart.AddCommand(listCmd, addCmd, removeCmd, clearCmd)
+	dealsCmd := &cobra.Command{
+		Use:   "deals",
+		Short: "Show active deals for cart items",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cartDeals()
+		},
+	}
+
+	cart.AddCommand(listCmd, addCmd, removeCmd, clearCmd, dealsCmd)
 	return cart
+}
+
+func cartDeals() error {
+	c, err := GetClient()
+	if err != nil {
+		return err
+	}
+	cart, err := c.GetCart()
+	if err != nil {
+		return err
+	}
+	var deals []DealProduct
+	for _, cp := range cart.Products {
+		p, err := c.GetProduct(cp.Code)
+		if err != nil {
+			continue
+		}
+		if p.SavingsAmount == nil || *p.SavingsAmount <= 0 || len(p.PotentialPromotions) == 0 {
+			continue
+		}
+		deals = append(deals, DealProduct{
+			Code:         cp.Code,
+			Name:         cp.Name,
+			Manufacturer: cp.Manufacturer,
+			Volume:       cp.DisplayVolume,
+			Quantity:     cp.PickQuantity,
+			TotalPrice:   cp.TotalPrice,
+			Promotion:    p.PotentialPromotions[0],
+			Savings:      *p.SavingsAmount,
+		})
+	}
+	fmt.Println(FormatCartDeals(deals))
+	return nil
 }
 
 func cartList() error {

@@ -10,17 +10,28 @@ type Customer struct {
 	StoreID   string `json:"storeId"`
 }
 
+// Promotion represents a potential deal on a product.
+type Promotion struct {
+	ConditionLabel  string         `json:"conditionLabel"`
+	RewardLabel     string         `json:"rewardLabel"`
+	Price           FormattedPrice `json:"price"`
+	QualifyingCount int            `json:"qualifyingCount"`
+	PromotionType   string         `json:"promotionType"`
+}
+
 // Product represents a grocery product.
 type Product struct {
-	Name             string `json:"name"`
-	Code             string `json:"code"`
-	Price            string `json:"price"`
-	PriceValue       float64 `json:"priceValue"`
-	ComparePrice     string `json:"comparePrice"`
-	ComparePriceUnit string `json:"comparePriceUnit"`
-	Manufacturer     string `json:"manufacturer"`
-	DisplayVolume    string `json:"displayVolume"`
-	OutOfStock       bool   `json:"outOfStock"`
+	Name                string      `json:"name"`
+	Code                string      `json:"code"`
+	Price               string      `json:"price"`
+	PriceValue          float64     `json:"priceValue"`
+	ComparePrice        string      `json:"comparePrice"`
+	ComparePriceUnit    string      `json:"comparePriceUnit"`
+	Manufacturer        string      `json:"manufacturer"`
+	DisplayVolume       string      `json:"displayVolume"`
+	OutOfStock          bool        `json:"outOfStock"`
+	PotentialPromotions []Promotion `json:"potentialPromotions"`
+	SavingsAmount       *float64    `json:"savingsAmount"`
 }
 
 // CartProduct is a product in the shopping cart.

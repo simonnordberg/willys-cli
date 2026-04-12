@@ -273,6 +273,20 @@ func (c *Client) Search(query string, page, size int) (SearchResult, error) {
 	return result, json.NewDecoder(resp.Body).Decode(&result)
 }
 
+// GetProduct fetches full product details including promotions.
+func (c *Client) GetProduct(code string) (Product, error) {
+	resp, err := c.do(http.MethodGet, "/axfood/rest/p/"+code, nil)
+	if err != nil {
+		return Product{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return Product{}, fmt.Errorf("get product failed: %d", resp.StatusCode)
+	}
+	var p Product
+	return p, json.NewDecoder(resp.Body).Decode(&p)
+}
+
 // Categories returns the full category tree.
 func (c *Client) Categories() (Category, error) {
 	params := url.Values{

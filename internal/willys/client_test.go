@@ -143,6 +143,119 @@ func TestParseCart(t *testing.T) {
 	}
 }
 
+func TestParseProductWithPromotions(t *testing.T) {
+	raw := `{
+		"results": [{
+			"name":"Prosciutto Crudo Skivad",
+			"code":"101206348_ST",
+			"price":"37,76 kr",
+			"priceValue":37.76,
+			"manufacturer":"Garant",
+			"displayVolume":"80g",
+			"comparePrice":"472,00 kr",
+			"comparePriceUnit":"kg",
+			"savingsAmount":25.52,
+			"potentialPromotions":[{
+				"conditionLabel":"2 för",
+				"rewardLabel":"50,00",
+				"qualifyingCount":2,
+				"promotionType":"MixMatchPricePromotion",
+				"price":{"value":25.0,"formattedValue":"25,00 kr","currencyIso":"SEK"}
+			}]
+		}],
+		"pagination":{"totalNumberOfResults":1,"numberOfPages":1,"currentPage":0,"pageSize":10}
+	}`
+	var result SearchResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	p := result.Results[0]
+	if p.SavingsAmount == nil || *p.SavingsAmount != 25.52 {
+		t.Errorf("savingsAmount = %v, want 25.52", p.SavingsAmount)
+	}
+	if len(p.PotentialPromotions) != 1 {
+		t.Fatalf("promotions = %d, want 1", len(p.PotentialPromotions))
+	}
+	promo := p.PotentialPromotions[0]
+	if promo.ConditionLabel != "2 för" {
+		t.Errorf("conditionLabel = %q", promo.ConditionLabel)
+	}
+	if promo.RewardLabel != "50,00" {
+		t.Errorf("rewardLabel = %q", promo.RewardLabel)
+	}
+	if promo.QualifyingCount != 2 {
+		t.Errorf("qualifyingCount = %d", promo.QualifyingCount)
+	}
+	if promo.Price.Value != 25.0 {
+		t.Errorf("price.value = %f", promo.Price.Value)
+	}
+}
+
+func TestParseProductNoPromotions(t *testing.T) {
+	raw := `{
+		"results": [{"name":"Mjölk","code":"100010649_ST","price":"21,90 kr","manufacturer":"Falköpings","displayVolume":"1,5l"}],
+		"pagination":{"totalNumberOfResults":1,"numberOfPages":1,"currentPage":0,"pageSize":10}
+	}`
+	var result SearchResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	p := result.Results[0]
+	if p.SavingsAmount != nil {
+		t.Errorf("savingsAmount should be nil, got %v", *p.SavingsAmount)
+	}
+	if len(p.PotentialPromotions) != 0 {
+		t.Errorf("promotions should be empty, got %d", len(p.PotentialPromotions))
+	}
+}
+
+func TestGetProduct(t *testing.T) {
+	raw := `{
+		"name":"Prosciutto Crudo Skivad",
+		"code":"101206348_ST",
+		"price":"37,76 kr",
+		"priceValue":37.76,
+		"manufacturer":"Garant",
+		"displayVolume":"80g",
+		"savingsAmount":25.52,
+		"potentialPromotions":[{
+			"conditionLabel":"2 för",
+			"rewardLabel":"50,00",
+			"qualifyingCount":2,
+			"promotionType":"MixMatchPricePromotion",
+			"price":{"value":25.0,"formattedValue":"25,00 kr","currencyIso":"SEK"}
+		}]
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/axfood/rest/p/101206348_ST" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(raw))
+	}))
+	defer srv.Close()
+
+	c := &Client{http: srv.Client(), cookies: map[string]string{}}
+	c.baseOverride = srv.URL
+
+	p, err := c.GetProduct("101206348_ST")
+	if err != nil {
+		t.Fatalf("GetProduct: %v", err)
+	}
+	if p.Code != "101206348_ST" {
+		t.Errorf("code = %q", p.Code)
+	}
+	if p.SavingsAmount == nil || *p.SavingsAmount != 25.52 {
+		t.Errorf("savingsAmount = %v", p.SavingsAmount)
+	}
+	if len(p.PotentialPromotions) != 1 {
+		t.Fatalf("promotions = %d", len(p.PotentialPromotions))
+	}
+	if p.PotentialPromotions[0].ConditionLabel != "2 för" {
+		t.Errorf("conditionLabel = %q", p.PotentialPromotions[0].ConditionLabel)
+	}
+}
+
 func TestSessionRoundTrip(t *testing.T) {
 	tmp := t.TempDir()
 	orig := sessionPath

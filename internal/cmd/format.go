@@ -19,18 +19,68 @@ func formatDesc(name, manufacturer, volume string) string {
 	return strings.Join(parts, " ")
 }
 
+// formatPromotion returns a compact deal string, or "" if none.
+func formatPromotion(p willys.Product) string {
+	if p.SavingsAmount == nil || *p.SavingsAmount <= 0 || len(p.PotentialPromotions) == 0 {
+		return ""
+	}
+	promo := p.PotentialPromotions[0]
+	if promo.ConditionLabel != "" && promo.RewardLabel != "" {
+		return fmt.Sprintf("%s %s", promo.ConditionLabel, promo.RewardLabel)
+	}
+	return ""
+}
+
 // FormatProduct formats a search/browse result line.
-// Format: CODE  PRICE  (COMPARE)  Description
+// Format: CODE  PRICE  (COMPARE)  Description  [DEAL]
 func FormatProduct(p willys.Product) string {
 	compare := ""
 	if p.ComparePrice != "" && p.ComparePriceUnit != "" {
 		compare = fmt.Sprintf("%s/%s", p.ComparePrice, p.ComparePriceUnit)
 	}
 	desc := formatDesc(p.Name, p.Manufacturer, p.DisplayVolume)
+	promo := formatPromotion(p)
+	if promo != "" {
+		desc += "  << " + promo
+	}
 	if compare != "" {
 		return fmt.Sprintf("  %-16s  %10s  %-14s  %s", p.Code, p.Price, compare, desc)
 	}
 	return fmt.Sprintf("  %-16s  %10s                  %s", p.Code, p.Price, desc)
+}
+
+// DealProduct holds a cart item paired with its promotion info.
+type DealProduct struct {
+	Code         string
+	Name         string
+	Manufacturer string
+	Volume       string
+	Quantity     int
+	TotalPrice   string
+	Promotion    willys.Promotion
+	Savings      float64
+}
+
+// FormatCartDeals formats the deals found in the cart.
+func FormatCartDeals(deals []DealProduct) string {
+	if len(deals) == 0 {
+		return "No deals found in cart."
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Cart deals:\n\n")
+	totalSavings := 0.0
+	for _, d := range deals {
+		desc := formatDesc(d.Name, d.Manufacturer, d.Volume)
+		promo := ""
+		if d.Promotion.ConditionLabel != "" && d.Promotion.RewardLabel != "" {
+			promo = fmt.Sprintf("%s %s", d.Promotion.ConditionLabel, d.Promotion.RewardLabel)
+		}
+		fmt.Fprintf(&b, "  %-16s  %2d  %10s  %s\n", d.Code, d.Quantity, d.TotalPrice, desc)
+		fmt.Fprintf(&b, "  %16s              %s (sparar %.0f kr)\n", "", promo, d.Savings)
+		totalSavings += d.Savings
+	}
+	fmt.Fprintf(&b, "\nPotential savings: ~%.0f kr", totalSavings)
+	return b.String()
 }
 
 // FormatCart formats the full cart.

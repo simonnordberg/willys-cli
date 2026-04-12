@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/simonnordberg/willys-cli/internal/willys"
@@ -68,18 +69,22 @@ func FormatCartDeals(deals []DealProduct) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Cart deals:\n\n")
-	totalSavings := 0.0
+	// Accumulate in öre (integer cents) to avoid float rounding drift.
+	totalSavingsOre := int64(0)
 	for _, d := range deals {
 		desc := formatDesc(d.Name, d.Manufacturer, d.Volume)
 		promo := ""
 		if d.Promotion.ConditionLabel != "" && d.Promotion.RewardLabel != "" {
 			promo = fmt.Sprintf("%s %s", d.Promotion.ConditionLabel, d.Promotion.RewardLabel)
 		}
+		savingsOre := int64(math.Round(d.Savings * 100))
 		fmt.Fprintf(&b, "  %-16s  %2d  %10s  %s\n", d.Code, d.Quantity, d.TotalPrice, desc)
-		fmt.Fprintf(&b, "  %16s              %s (sparar %.0f kr)\n", "", promo, d.Savings)
-		totalSavings += d.Savings
+		fmt.Fprintf(&b, "  %16s              %s (sparar %.2f kr)\n", "", promo, float64(savingsOre)/100)
+		totalSavingsOre += savingsOre
 	}
-	fmt.Fprintf(&b, "\nPotential savings: ~%.0f kr", totalSavings)
+	kr := totalSavingsOre / 100
+	ore := totalSavingsOre % 100
+	fmt.Fprintf(&b, "\nPotential savings: %d,%02d kr", kr, ore)
 	return b.String()
 }
 

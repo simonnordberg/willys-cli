@@ -216,10 +216,13 @@ func TestFormatCartDeals(t *testing.T) {
 		},
 	}
 	got := FormatCartDeals(products)
-	for _, want := range []string{"101206348_ST", "2 för 50,00", "Prosciutto Crudo Skivad", "sparar"} {
+	for _, want := range []string{"101206348_ST", "2 för 50,00", "Prosciutto Crudo Skivad", "sparar 25.52 kr"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("FormatCartDeals missing %q in:\n%s", want, got)
 		}
+	}
+	if !strings.Contains(got, "Potential savings: 25,52 kr") {
+		t.Errorf("FormatCartDeals should show exact savings total, got:\n%s", got)
 	}
 }
 

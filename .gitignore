@@ -1,6 +1,4 @@
 /willys
-.env
-
 /willys-cli
-shopping/
+.env
 .claude/
